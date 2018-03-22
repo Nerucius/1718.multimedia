@@ -24,6 +24,7 @@ def bot(queue):
 
 if __name__ == "__main__":
     """ test suite """
+    
     queue = []
     queue = insert(queue, ('EMPTY', 1))
     print queue

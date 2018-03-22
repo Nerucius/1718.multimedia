@@ -49,6 +49,10 @@ if __name__ == "__main__":
     tree = huff.huffman_tree(freq)
     codes = huff.huffman_codes(tree)
 
+    print "symbol bits:"
+    for s, bits in codes.items():
+        print "\t%s \t%s" %(s, bits)
+
     # Encode the text using the generated huffman codes
     encoded = huff.huffman_encode(text, codes)
 

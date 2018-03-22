@@ -142,7 +142,7 @@ if __name__ == "__main__":
 
     text = "ABCDEFGH"
     encoded = huffman_encode(text, codes)
-    bits_text = len(text) * 8.0
+    bits_text = len(text) * 7.0
     bits_encoded = len(encoded) / 1.0
 
     print text

@@ -35,10 +35,10 @@ size after compression: 0.31783%
 NOTE: compression ratio afected by symbol '10' being 2 characters.
 ```
 
-### Running the test suites::
+### Running the test suites:
 
 ```
 $ cd huffman
-$ python huffmain.py
+$ python huffman.py
 $ python pqueue.py
 ```

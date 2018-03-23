@@ -4,7 +4,7 @@ from binarytree import (left as l, right as r, parent as p, trim)
 from pqueue import top, insert, bot
 
 
-def huffman_descend(tree, root):
+def _huffman_descend(tree, root):
     """ Recursive descend a huffman tree, splitting tuple nodes into more leaves """
 
     # unpack item and freq
@@ -20,9 +20,9 @@ def huffman_descend(tree, root):
 
         # If node is still a tuple, descend
         if type(a[0]) == tuple:
-            huffman_descend(tree, l(root))
+            _huffman_descend(tree, l(root))
         if type(b[0]) == tuple:
-            huffman_descend(tree, r(root))
+            _huffman_descend(tree, r(root))
 
     else:
         tree[l(root)] = (bi,bf)
@@ -30,9 +30,9 @@ def huffman_descend(tree, root):
 
         # If node is still a tuple, descend
         if type(a[0]) == tuple:
-            huffman_descend(tree, r(root))
+            _huffman_descend(tree, r(root))
         if type(b[0]) == tuple:
-            huffman_descend(tree, l(root))
+            _huffman_descend(tree, l(root))
 
 
 def huffman_tree(freq):
@@ -44,7 +44,8 @@ def huffman_tree(freq):
     pq = []
     codes = {}
 
-    # Don't assume frequencies will be sorted
+    # Don't assume frequencies will be sorted, insert into priority queue
+    # instead of using freq array directly
     for item in freq:
         pq = insert(pq, item)
 
@@ -54,14 +55,16 @@ def huffman_tree(freq):
         z = bot(pq)
         y = bot(pq)
 
-        # Join and insert into priority list
+        # Join and insert into priority list, new priority is
+        # sum of two prevs
         yz = ((y,z), y[1] + z[1])
         pq = insert(pq, yz)
 
     # Root node is all symbols, freq is 100%
     tree[0] = top(pq)
 
-    huffman_descend(tree, 0)      
+    # Recursive descent of the tree from the root node downwards
+    _huffman_descend(tree, 0)      
     
     return trim(tree)
 

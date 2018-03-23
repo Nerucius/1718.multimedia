@@ -45,7 +45,6 @@ if __name__ == "__main__":
         text += rand.choice(freqtable)
 
     # Generate the huffman tree and a corresponding translation table
-    # for this 
     tree = huff.huffman_tree(freq)
     codes = huff.huffman_codes(tree)
 
@@ -53,16 +52,6 @@ if __name__ == "__main__":
     for s, bits in codes.items():
         print "\t%s \t%s" %(s, bits)
 
-    # Encode the text using the generated huffman codes
-    encoded = huff.huffman_encode(text, codes)
-
-    # Calcualte number of bits used by the plain text and the huffman encoded bits
-    bits_text = len(text) * CHARSIZE * 1.0
-    bits_encoded = len(encoded)
-
-    print "text: ", text[:16], "..."
-    print "encoded: ", encoded[:16], "..."
-    print "compression: %.5f%%" % (bits_encoded / bits_text)
 
     # Entropy and mean bits per symbol:
     ent = entropy(freq)
@@ -74,3 +63,20 @@ if __name__ == "__main__":
     # Compression ratio:
     cr = CHARSIZE / mbs
     print "Huffman compression ratio %.2f:1" % cr
+
+    print "------------------------"
+
+    # Encode the text using the generated huffman codes
+    encoded = huff.huffman_encode(text, codes)
+
+    decoded = huff.huffman_decode(encoded, codes)
+
+    # Calcualte number of bits used by the plain text and the huffman encoded bits
+    bits_text = len(text) * CHARSIZE * 1.0
+    bits_encoded = len(encoded)
+
+    print "text: ", text[:16], "..."
+    print "encoded: ", encoded[:16], "..."
+    print "text == decoded:", text == decoded
+    print "size after compression: %.5f%%" % (bits_encoded / bits_text)
+    print "NOTE: compression ratio afected by symbol '10' being 2 characters."

@@ -1,32 +1,38 @@
-import sys, zipfile
+import sys, zipfile, os
 import argparse
 import pygame
 import time
-import numpy
+
+import numpy as np
+from scipy import signal
 
 from cStringIO import StringIO
-
-# Screen Resolution
-size = width, height = [320, 240]
-screen = pygame.display.set_mode(size)
 
 white = (255,255,255)
 black = (  0,  0,  0)
 
-zip_filepath = "assets/Cubo.zip"
-zip_file = zipfile.ZipFile(zip_filepath)
-zip_images = zip_file.namelist()
-
 def get_frame(f):
-    img_data = zip_file.read(zip_images[f])
+    next_frame = f % len(zip_images)
+
+    img_data = zip_file.read(zip_images[next_frame])
     img_stream = StringIO(img_data)
-    return pygame.image.load(img_stream, zip_images[f])
+    return pygame.image.load(img_stream, zip_images[next_frame])
 
 def fx_negative(surface):
     # Get direct access to pixel data
     arr = pygame.surfarray.pixels3d(surface)
     # Invert all 3 channels, numpy broadcasting
     arr[:,:,:] = 255 - arr[:,:,:]
+    return surface
+
+def fx_grayscale(surface):
+    # Get direct access to pixel data
+    arr = pygame.surfarray.pixels3d(surface)
+    # BT.709 Grayscale weights
+    grayscale = arr[:,:,0] * 0.2126 + arr[:,:,1] * 0.7152 + arr[:,:,2] * 0.0722
+    for i in range(3):
+        arr[:,:,i] = grayscale
+
     return surface
 
 def fx_binarize(surface, thres):
@@ -36,9 +42,37 @@ def fx_binarize(surface, thres):
     # BT.709 Grayscale weights
     grayscale = arr[:,:,0] * 0.2126 + arr[:,:,1] * 0.7152 + arr[:,:,2] * 0.0722
     mask = grayscale < thres
+    arr[ mask, :] = 0
+    arr[~mask, :] = 255
+
+    return surface
+
+def fx_average(surface, radius):
+    # Get direct access to pixel data
+    arr = pygame.surfarray.pixels3d(surface)
+
+    kernel = np.ones([radius, radius])
+    kernel = kernel / kernel.sum()
+
+    # 2D convolution using Fast Fourier Transform
     for i in range(3):
-        arr[mask,i] = 0
-        arr[~mask,i] = 255
+        arr[:,:,i] = signal.fftconvolve(arr[:,:,i], kernel, mode="same")
+
+    return surface
+
+def fx_edge(surface):
+    # Get direct access to pixel data
+    grayscale = fx_grayscale(surface)
+    arr = pygame.surfarray.pixels3d(grayscale)
+    kernel = np.array(
+        [[ 0,-1, 0],
+         [-1, 4,-1],
+         [ 0,-1, 0]]
+    )
+    # 2D convolution using Fast Fourier Transform
+    arr[:,:,0] = signal.fftconvolve(arr[:,:,0], kernel, mode="same")
+    arr[:,:,1] = arr[:,:,0]
+    arr[:,:,2] = arr[:,:,0]
 
     return surface
 
@@ -48,35 +82,61 @@ last_frame_time = -999
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description="Media Player")
-    parser.add_argument('-i', metavar="<filepath>", type=str, help="path to input ZIP file")
+    parser.add_argument('-i', metavar="<filepath>", type=str, default="assets/Cubo.zip",
+        help="path to input ZIP file")
+    parser.add_argument('-o', metavar="<filepath>", type=str,
+        help="path to output folder to store resulting frames")
     parser.add_argument('--fps', metavar="<integer>", type=int, default=25,
         help="Playback framerate")
     parser.add_argument('--binarization', metavar="<threshold>", type=int,
         help="Binarization threshold (anything lower will become black")
     parser.add_argument('--negative', action='store_true', help="Set flag to invert image")
+    parser.add_argument('--edge', action='store_true', help="Set flag run laplacian Edge detection")
     parser.add_argument('--averaging', metavar="<radius>", type=int, help="Average blur filter radius")
 
     args = parser.parse_args()
-
     print args
 
+    # Load Image List from zip file, and sort using "human" logic
+    zip_file = zipfile.ZipFile(args.i)
+    zip_images = zip_file.namelist()
+    from natural_sort import sort_nicely
+    sort_nicely(zip_images)
+
+    # Frametive is the inverse of the FPS
     frame_time = 1.0 / args.fps
 
+    # PyGame Config
     pygame.init()
     pygame.display.set_caption("TMM Media Player 0.1f1")
+
+    # Screen Resolution
+    size = width, height = get_frame(0).get_size()
+    screen = pygame.display.set_mode(size)
 
     while 1:
         for event in pygame.event.get():
             if event.type == pygame.QUIT: sys.exit()
 
         # Load next frame
-        img_frame = get_frame(frame % 100)
+        img_frame = get_frame(frame)
+
+        # Apply filters
+        if args.negative:
+            img_frame = fx_negative(img_frame)
+
+        if args.averaging:
+            img_frame = fx_average(img_frame, args.averaging)
+
+        if args.edge:
+            img_frame = fx_edge(img_frame)
 
         if args.binarization:
             img_frame = fx_binarize(img_frame, args.binarization)
 
-        if args.negative:
-            img_frame = fx_negative(img_frame)
+        if args.o:
+            out_path = os.path.join(args.o, "frame_%04d.jpg" % frame)
+            pygame.image.save(img_frame, out_path)
 
         screen.fill(black)
         screen.blit(img_frame, [0,0])

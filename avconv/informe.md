@@ -96,6 +96,7 @@ Es pot observar una relació practicament lineal entre `framerate` i mida del fi
 | SATD   | 1.25 s | 416.2 KiB  | 
 | CHROMA | 1.70 s | 412.9 KiB  |
 
+
 - **SAD**: Suma absoluta dels errors. Mesura estandard de similitud.
 - **SSE**: Quadrat dels errors, un altra manera d'agafar el valor absolut, pero com es quadratic, petites diferencies fan petits errors, i grans diferencies fan errors no lineal, sino exponencialment més grans. I.e. `2 - 6 -> SAD:4 | SSE:16`
 - **SATD**: Transformació Fourier discreta en dos dimensions. Un metode que intenta estimar i compensar el moviment a nivell de sub-pixels.

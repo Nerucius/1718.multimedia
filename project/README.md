@@ -51,7 +51,7 @@ To play back `assets/Cubo.zip` with negative video effect and then store all fra
 `out` folder:
 
 ```
-python main.py --negative -o out
+python main.py -i assets/Cubo.zip --negative -o out
 ```
 
 ## Demo

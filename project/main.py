@@ -60,14 +60,15 @@ def fx_average(surface, radius):
 
     return surface
 
-def fx_scale(surface, scale):
-    if scale == 2:
-        return pygame.transform.scale2x(surface)
-
-    w, h = (np.array(surface.get_size()) * scale).astype(int)
-    return pygame.transform.scale(surface, (w,h))
+def fx_scale(surface, dim, target=None):
+    if target:
+        return pygame.transform.smoothscale(surface, dim, target)
+    else:
+        return pygame.transform.smoothscale(surface, dim)
 
 def fx_edge(surface):
+    return pygame.transform.laplacian(surface)
+
     # Get direct access to pixel data
     grayscale = fx_grayscale(surface)
     arr = pygame.surfarray.pixels3d(grayscale)
@@ -100,7 +101,8 @@ if __name__ == '__main__':
     parser.add_argument('--binarization', metavar="<threshold>", type=int,
         help="Binarization threshold (anything lower will become black")
     parser.add_argument('--negative', action='store_true', help="Set flag to invert image")
-    parser.add_argument('--edges', action='store_true', help="Set flag run laplacian Edge detection")
+    parser.add_argument('--edges', action='store_true', help="Set flag to run laplacian Edge detection")
+    parser.add_argument('--gray', action='store_true', help="Set flag to show in weighted grayscale")
     parser.add_argument('--averaging', metavar="<radius>", type=int, help="Average blur filter radius")
 
     args = parser.parse_args()
@@ -126,8 +128,10 @@ if __name__ == '__main__':
 
     # Screen Resolution
     size = np.array(get_frame(0).get_size())
-    size = (size * args.scale + 0.5).astype(int)
+    size = (size * args.scale).astype(int)
     screen = pygame.display.set_mode(size)
+
+    final_surf = fx_scale(get_frame(frame), size)
 
     while 1:
         frame_start = time.clock()
@@ -151,18 +155,24 @@ if __name__ == '__main__':
         if args.binarization:
             img_frame = fx_binarize(img_frame, args.binarization)
 
-        if args.o:
-            out_path = os.path.join(args.o, "frame_%04d.jpg" % frame)
-            pygame.image.save(img_frame, out_path)
+        if args.gray:
+            img_frame = fx_grayscale(img_frame)
 
         if args.scale != 1:
-            img_frame = fx_scale(img_frame, args.scale)
+            fx_scale(img_frame, size, final_surf)
+        else:
+            final_surf.blit(img_frame, (0,0))
+        
+        # Save final frame
+        if args.o:
+            out_path = os.path.join(args.o, "frame_%04d.jpg" % frame)
+            pygame.image.save(final_surf, out_path)
 
-        screen.fill(black)
-        screen.blit(img_frame, [0,0])
-            
         # Free frame memory
         del img_frame
+        
+        screen.blit(final_surf, (0,0))
+            
         # Advance Frame
         frame += 1
 

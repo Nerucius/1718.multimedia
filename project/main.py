@@ -60,6 +60,13 @@ def fx_average(surface, radius):
 
     return surface
 
+def fx_scale(surface, scale):
+    if scale == 2:
+        return pygame.transform.scale2x(surface)
+
+    w, h = (np.array(surface.get_size()) * scale).astype(int)
+    return pygame.transform.scale(surface, (w,h))
+
 def fx_edge(surface):
     # Get direct access to pixel data
     grayscale = fx_grayscale(surface)
@@ -86,12 +93,14 @@ if __name__ == '__main__':
         help="path to input ZIP file")
     parser.add_argument('-o', metavar="<filepath>", type=str,
         help="path to output folder to store resulting frames")
+    parser.add_argument('--scale', metavar="<float>", type=float, default=1,
+        help="Scale factor for final graphics")
     parser.add_argument('--fps', metavar="<integer>", type=int, default=25,
         help="Playback framerate")
     parser.add_argument('--binarization', metavar="<threshold>", type=int,
         help="Binarization threshold (anything lower will become black")
     parser.add_argument('--negative', action='store_true', help="Set flag to invert image")
-    parser.add_argument('--edge', action='store_true', help="Set flag run laplacian Edge detection")
+    parser.add_argument('--edges', action='store_true', help="Set flag run laplacian Edge detection")
     parser.add_argument('--averaging', metavar="<radius>", type=int, help="Average blur filter radius")
 
     args = parser.parse_args()
@@ -104,17 +113,25 @@ if __name__ == '__main__':
     sort_nicely(zip_images)
 
     # Frametive is the inverse of the FPS
-    frame_time = 1.0 / args.fps
+    if args.fps <= 0:
+        frame_time_target = -1
+    else:
+        frame_time_target = 1.0 / args.fps
 
     # PyGame Config
     pygame.init()
     pygame.display.set_caption("TMM Media Player 0.1f1")
+    pygame.font.init()
+    font = pygame.font.SysFont('Consolas', 16)
 
     # Screen Resolution
-    size = width, height = get_frame(0).get_size()
+    size = np.array(get_frame(0).get_size())
+    size = (size * args.scale + 0.5).astype(int)
     screen = pygame.display.set_mode(size)
 
     while 1:
+        frame_start = time.clock()
+
         for event in pygame.event.get():
             if event.type == pygame.QUIT: sys.exit()
 
@@ -128,7 +145,7 @@ if __name__ == '__main__':
         if args.averaging:
             img_frame = fx_average(img_frame, args.averaging)
 
-        if args.edge:
+        if args.edges:
             img_frame = fx_edge(img_frame)
 
         if args.binarization:
@@ -138,17 +155,39 @@ if __name__ == '__main__':
             out_path = os.path.join(args.o, "frame_%04d.jpg" % frame)
             pygame.image.save(img_frame, out_path)
 
+        if args.scale != 1:
+            img_frame = fx_scale(img_frame, args.scale)
+
         screen.fill(black)
         screen.blit(img_frame, [0,0])
             
-        frame += 1
         # Free frame memory
         del img_frame
+        # Advance Frame
+        frame += 1
 
+        # Calculat elapsed time and real FPS
+        frame_end = time.clock()
+        frame_time = frame_end - frame_start
+        
         # wait for X seconds, as many as necesary to stay on target frame time
-        wait_time = frame_time - (time.clock() - last_frame_time)
-        time.sleep(max(0,frame_time))
-        last_frame_time = time.clock()
+        wait_time = frame_time_target - frame_time
+        time.sleep(max(0, wait_time))
+
+        # Calcualte real FPS after wait, and print to screen
+        frame_end_wait = time.clock()
+
+        frame_time_wait = frame_end_wait - frame_start
+        real_fps = 1.0 / frame_time_wait
+
+        frame_alloc = (1- (frame_time_target - frame_time) / frame_time_target) * 100.0
+        text_color = (128,255,128)
+        if frame_alloc > 100:
+            text_color = (255,128,128)
+
+        font_surf = font.render('%.2f FPS (ft:%.3fms) (fa:%.2f%%)' % (real_fps, frame_time, frame_alloc),
+            True, text_color)
+        screen.blit(font_surf, [0,0])
 
         # Show new frame
         pygame.display.flip()

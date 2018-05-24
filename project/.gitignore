@@ -1,7 +1,11 @@
 /out/*
 !/out/.gitkeep
 
-/env/*
+**/env/*
+**/env_win/*
+
+**/*.pdf
+/*.zip
 
 /assets/*
 !/assets/Cubo.zip

@@ -5,8 +5,10 @@ import time
 
 import numpy as np
 from scipy import signal
-
 from cStringIO import StringIO
+
+from effects import *
+from natural_sort import sort_nicely
 
 white = (255,255,255)
 black = (  0,  0,  0)
@@ -18,74 +20,11 @@ def get_frame(f):
     img_stream = StringIO(img_data)
     return pygame.image.load(img_stream, zip_images[next_frame])
 
-def fx_negative(surface):
-    # Get direct access to pixel data
-    arr = pygame.surfarray.pixels3d(surface)
-    # Invert all 3 channels, numpy broadcasting
-    arr[:,:,:] = 255 - arr[:,:,:]
-    return surface
-
-def fx_grayscale(surface):
-    # Get direct access to pixel data
-    arr = pygame.surfarray.pixels3d(surface)
-    # BT.709 Grayscale weights
-    grayscale = arr[:,:,0] * 0.2126 + arr[:,:,1] * 0.7152 + arr[:,:,2] * 0.0722
-    for i in range(3):
-        arr[:,:,i] = grayscale
-
-    return surface
-
-def fx_binarize(surface, thres):
-    # Get direct access to pixel data
-    arr = pygame.surfarray.pixels3d(surface)
-
-    # BT.709 Grayscale weights
-    grayscale = arr[:,:,0] * 0.2126 + arr[:,:,1] * 0.7152 + arr[:,:,2] * 0.0722
-    mask = grayscale < thres
-    arr[ mask, :] = 0
-    arr[~mask, :] = 255
-
-    return surface
-
-def fx_average(surface, radius):
-    # Get direct access to pixel data
-    arr = pygame.surfarray.pixels3d(surface)
-
-    kernel = np.ones([radius, radius])
-    kernel = kernel / kernel.sum()
-
-    # 2D convolution using Fast Fourier Transform
-    for i in range(3):
-        arr[:,:,i] = signal.fftconvolve(arr[:,:,i], kernel, mode="same")
-
-    return surface
-
-def fx_scale(surface, dim, target=None):
-    if target:
-        return pygame.transform.smoothscale(surface, dim, target)
-    else:
-        return pygame.transform.smoothscale(surface, dim)
-
-def fx_edge(surface):
-    return pygame.transform.laplacian(surface)
-
-    # Get direct access to pixel data
-    grayscale = fx_grayscale(surface)
-    arr = pygame.surfarray.pixels3d(grayscale)
-    kernel = np.array(
-        [[ 0,-1, 0],
-         [-1, 4,-1],
-         [ 0,-1, 0]]
-    )
-    # 2D convolution using Fast Fourier Transform
-    arr[:,:,0] = signal.fftconvolve(arr[:,:,0], kernel, mode="same")
-    arr[:,:,1] = arr[:,:,0]
-    arr[:,:,2] = arr[:,:,0]
-
-    return surface
-
 frame = 0
 last_frame_time = -999
+
+def render():
+    pass
 
 if __name__ == '__main__':
 
@@ -100,9 +39,9 @@ if __name__ == '__main__':
         help="Playback framerate")
     parser.add_argument('--binarization', metavar="<threshold>", type=int,
         help="Binarization threshold (anything lower will become black")
-    parser.add_argument('--negative', action='store_true', help="Set flag to invert image")
-    parser.add_argument('--edges', action='store_true', help="Set flag to run laplacian Edge detection")
-    parser.add_argument('--gray', action='store_true', help="Set flag to show in weighted grayscale")
+    parser.add_argument('--negative', action='store_true', help="Inver image")
+    parser.add_argument('--edges', action='store_true', help="Run laplacian Edge detection")
+    parser.add_argument('--gray', action='store_true', help="Show in weighted grayscale")
     parser.add_argument('--averaging', metavar="<radius>", type=int, help="Average blur filter radius")
 
     args = parser.parse_args()
@@ -111,10 +50,9 @@ if __name__ == '__main__':
     # Load Image List from zip file, and sort using "human" logic
     zip_file = zipfile.ZipFile(args.i)
     zip_images = zip_file.namelist()
-    from natural_sort import sort_nicely
     sort_nicely(zip_images)
 
-    # Frametive is the inverse of the FPS
+    # Frametime is the inverse of the FPS
     if args.fps <= 0:
         frame_time_target = -1
     else:

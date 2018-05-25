@@ -44,12 +44,13 @@ def find_min_diff_offset(i_frame_lum, p_frame_lum, tile_rect, GRID, RANGE, RANGE
             if ox < 0 or oy < 0 or ox + GRID > FRAME_W or oy + GRID > FRAME_H:
                 continue
             
-            # Inline Compare
+            # Inline Compare, MSE
             fill_tile[:] = np.nan
             fill_tile[ox:ox+tw, oy:oy+th] = tile_lum
-            diff = target_lum - fill_tile
+            diff = np.abs(target_lum - fill_tile)
+            # diff = diff*diff
             np.nan_to_num(diff, False)
-            diff = np.sum(np.sum(np.abs(diff)))
+            diff = np.sum(np.sum(diff))
             # End Inline Compare
 
             # print dx, dy, '->', ox, oy, ':', diff
@@ -92,26 +93,36 @@ def find_tiles(i_frame, p_frame, GRID=16, QUALITY=5, RANGE=4, RANGE_STEP=2):
                 yield (tid, pos_delta)
 
 
-def encode(frames, FILE_OUT, GRID, QUALITY, GOP, RANGE, RANGE_STEP, FPS=24, CALLBACK=None):
-    _,_, FRAME_W, FRAME_H = frames[0].get_rect()
-    GRID_W, GRID_H = FRAME_W / GRID, FRAME_H / GRID
+def encode(frame_gen, FILE_OUT, GRID, QUALITY, GOP, RANGE, RANGE_STEP, CALLBACK=None, **kwargs):
+    ''' Encode a stream of frames to a file according to certain parameters. '''
 
     ZIP_FILE = zipfile.ZipFile(FILE_OUT, 'w', compression=zipfile.ZIP_DEFLATED)
-    tile_info = []
+    try: MAX_FRAMES = int(kwargs['MAX_FRAMES'])
+    except: MAX_FRAMES = -1
 
-    for FRAME in xrange(len(frames)):
+    tile_info = []
+    last_frame = None
+    frame_idx = 0
+
+    for curr_frame in frame_gen:
+        _,_, FRAME_W, FRAME_H = curr_frame.get_rect()
+        GRID_W, GRID_H = FRAME_W / GRID, FRAME_H / GRID
+
+        if frame_idx == MAX_FRAMES:
+            break
 
         # Load current frame as P Frame
-        p_frame = frames[FRAME]
-        IMAGE_FILENAME = 'frame-%03d.jpg' % FRAME
+        p_frame = curr_frame
+        image_filename = 'frame-%03d.jpg' % frame_idx
 
-        if FRAME % GOP == 0:
+        if frame_idx % GOP == 0:
             # Save ref picture if we're at a GOP boundary
-            pygame.image.save(p_frame, 'out/frame-%03d.jpg' % FRAME)
+            pygame.image.save(p_frame, 'out/frame-%03d.jpg' % frame_idx)
+            if CALLBACK: CALLBACK(p_frame, frame_idx, tile_info)
 
         else:
-            # Load prev frame for predictions
-            i_frame = frames[FRAME - 1]
+            # Load prev frame as I Frame
+            i_frame = last_frame
 
             # screen.blit(p_frame, (0,0))
             # pygame.display.flip()
@@ -127,28 +138,36 @@ def encode(frames, FILE_OUT, GRID, QUALITY, GOP, RANGE, RANGE_STEP, FPS=24, CALL
                 ty = tid / GRID_W * GRID
                 fill_px = p_frame_px[tx:tx+GRID, ty:ty+GRID, :]
                 p_frame_out_px[tx:tx+GRID, ty:ty+GRID, :] = np.mean(fill_px, (0,1,))
+                # p_frame_out_px[tx:tx+GRID, ty:ty+GRID, :] = 0
                 del fill_px
 
-                tile_info += ["%d,%d,%d,%d\n" % (FRAME, tid, dx, dy)]
+                tile_info += ["%d,%d,%d,%d\n" % (frame_idx, tid, dx, dy)]
 
             del p_frame_px
             del p_frame_out_px
             
-            fx_average(p_frame_out, 4)
-            pygame.image.save(p_frame_out, 'out/%s' % IMAGE_FILENAME)
+            fx_average(p_frame_out, 2)
+            pygame.image.save(p_frame_out, 'out/frame-%03d.jpg' % frame_idx)
         
-            if CALLBACK: CALLBACK(p_frame_out, FRAME, tile_info)
+            if CALLBACK: CALLBACK(p_frame_out, frame_idx, tile_info)
         
-        ZIP_FILE.write('out/%s' % IMAGE_FILENAME, IMAGE_FILENAME)
-        os.unlink('out/%s' % IMAGE_FILENAME)
+        ZIP_FILE.write('out/%s' % image_filename, image_filename)
+        os.unlink('out/%s' % image_filename)
 
+        last_frame = curr_frame
+        frame_idx += 1
 
+    # Write config and parameters necessary to play back video
     CONFIG_FILE = open('out/config.txt', 'w')
     CONFIG_FILE.write("GRID=%d\n" % GRID)
     CONFIG_FILE.write("GRID_W=%d\n" % GRID_W)
     CONFIG_FILE.write("GRID_H=%d\n" % GRID_H)
-    CONFIG_FILE.write("FPS=%d\n" % FPS)
+    CONFIG_FILE.write("FRAME_W=%d\n" % FRAME_W)
+    CONFIG_FILE.write("FRAME_H=%d\n" % FRAME_H)
+    for k,v in kwargs.iteritems():
+        CONFIG_FILE.write("%s=%s\n" % (k,v))
     CONFIG_FILE.close()
+
     ZIP_FILE.write('out/config.txt', 'config.txt')
     os.unlink('out/config.txt')
 

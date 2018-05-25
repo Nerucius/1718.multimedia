@@ -6,6 +6,3 @@
 
 **/*.pdf
 /*.zip
-
-/assets/*
-!/assets/Cubo.zip

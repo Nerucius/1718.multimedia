@@ -10,12 +10,7 @@ from effects import *
 
 import encoder
 import decoder
-
-FILEPATH = 'assets/Cubo.zip'
-# FILEPATH = 'assets/3secuencias_BN.zip'
-zip_file = zipfile.ZipFile(FILEPATH)
-zip_images = zip_file.namelist()
-sort_nicely(zip_images)
+import player
 
 WHITE   = (255,255,255)
 BLACK   = (  0,  0,  0)
@@ -26,11 +21,18 @@ CYAN    = (  0,255,255)
 MAGENTA = (255,  0,255)
 YELLOW  = (255,255,  0)
 
-def get_frame(f):
-    next_frame = f % len(zip_images)
-    img_data = zip_file.read(zip_images[next_frame])
-    img_stream = StringIO(img_data)
-    return pygame.image.load(img_stream, zip_images[next_frame])
+def read_frames(filepath):
+    ''' Lazy frame reader generator. '''
+    z = zipfile.ZipFile(filepath)
+    zip_images = z.namelist()
+    sort_nicely(zip_images)
+
+    for frame_name in zip_images:
+        frame_data = z.read(frame_name)
+        frame_stream = StringIO(frame_data)
+        frame = pygame.image.load(frame_stream, frame_name)
+        yield frame
+    z.close()
 
 def draw_screen(sleep=None):
     for event in pygame.event.get():
@@ -48,6 +50,21 @@ def apply_effects(img_frame, args):
     if args.binarization: fx_binarize(img_frame, args.binarization)
     if args.gray: fx_grayscale(img_frame)
 
+# def encode_progress(frame, frame_idx, tile_info):
+#     GRID = args.ntiles
+#     GRID_W = FRAME_W / GRID
+#     tile_info = [line.strip().split(',') for line in tile_info]
+#     screen.blit(frame, (0,0))
+
+#     for tile in tile_info:
+#         f, tid, dx, dy = [int(x) for x in tile]
+#         if f != frame_idx: continue
+#         tx = tid % GRID_W * GRID
+#         ty = tid / GRID_W * GRID
+#         # offx, offy = (tx+dx, ty+dy)
+#         # pygame.draw.rect(screen, GREEN, (tx, ty, GRID, GRID), 1)
+#     draw_screen(0)
+
 if __name__ == '__main__':
 
     # Arguments
@@ -57,23 +74,28 @@ if __name__ == '__main__':
     parser.add_argument('-d', '--decode', action='store_true',
         help="decoding mode, please specify input and output")
     parser.add_argument('-i', '--input', metavar="<filepath>", type=str,
-        help="path to input ZIP file")
+        help="path to input ZIP file", default='assets/Cubo.zip')
     parser.add_argument('-o', '--output', metavar="<filepath>", type=str,
-        help="path to output folder to store resulting frames")
+        default='out/movie.zip', help='filename to store movie' )
+    parser.add_argument('-b', '--batch', action='store_true', help="batch mode")
 
     # Encoding Arguments
-    parser.add_argument('--fps', metavar="<integer>", type=int, default=25,
-        help="encoding/decoding/playback framerate")
-    parser.add_argument('-q', '--quality', metavar="<int>", type=int, default=5,
+    parser.add_argument('--fps', metavar="<integer>", type=int,
+        help="encoding framerate")
+    parser.add_argument('-q', '--quality', metavar="<int>", type=int, default=15,
         help="quality, lower is better")
     parser.add_argument('-t','--ntiles', metavar="<int>", type=int, default=16,
         help="grid size in pixels")
     parser.add_argument('-gop', metavar="<int>", type=int, default=5,
         help="GOP length")
-    parser.add_argument('-r','-seekRange', metavar="<int>", type=int, default=2,
+    parser.add_argument('-r','--seekRange', metavar="<int>", type=int, default=2,
         help="seek range for motion estimation")
     parser.add_argument('-n', metavar="<int>", type=int,
         help="number of frames, leave empty for all")
+
+    # Player Arguments
+    parser.add_argument('--scale', metavar="<int>", type=int, default=1,
+        help="Binarization threshold (anything lower will become black")
 
     # Effects arguments
     parser.add_argument('--binarization', metavar="<threshold>", type=int,
@@ -86,40 +108,45 @@ if __name__ == '__main__':
 
     
     args = parser.parse_args()
-    # --------------------
-
-    if args.n:
-        n_frames = args.n
-    else:
-        n_frames = len(zip_images)
-
-    frames = [get_frame(x) for x in range(args.n+1)]
-    _,_, FRAME_W, FRAME_H = frames[0].get_rect()
-    SCREEN_SIZE = [FRAME_W,FRAME_H]
+    print args
 
     pygame.init()
-    screen = pygame.display.set_mode(SCREEN_SIZE)
+    screen = pygame.display.set_mode([400,300])
 
-    GOP = args.gop
-    GRID = args.g
-    GRID_W = FRAME_W / args.g 
-    QUALITY = args.q
-    RANGE, RANGE_STEP = 2, 1
+    if args.encode:
+        frame_reader = read_frames(args.input)
+
+        def progress(frame, frame_idx, tinfo):
+            _,_,FW,FH = frame.get_rect()
+            player.playback(
+                {'FPS':0, 'SCALE':args.scale, 'FRAME_W':FW, 'FRAME_H':FH},
+            [frame])
+
+        if args.batch:
+            CALLBACK = None
+        else:
+            CALLBACK = progress
+
+        FPS = 25
+        if args.fps: FPS = args.fps
+
+        encoder.encode(frame_reader, args.output,
+            GRID=args.ntiles, QUALITY=args.quality, GOP=args.gop,
+            RANGE=args.seekRange, RANGE_STEP=max(args.seekRange / 2, 1),
+            CALLBACK=CALLBACK, FPS=FPS, MAX_FRAMES=args.n)
+
+    if args.decode:
+        config, frames = decoder.decode(args.input)
+        if args.fps: config['FPS'] = args.fps
+
+        print config 
+        config['SCALE'] = args.scale
+
+        player.playback(config, frames)
 
 
-    def encode_progress(frame, frame_idx, tile_info):
-        screen.blit(frame, (0,0))
-        # for f, tid, dx, dy in filter(lambda x : x[0] == frame_idx, tile_info):
-        #     tx = tid % GRID_W * GRID
-        #     ty = tid / GRID_W * GRID
-        #     # offx, offy = (tx+dx, ty+dy)
-        #     pygame.draw.rect(screen, GREEN, (tx, ty, GRID, GRID), 1)
-        
-        draw_screen(0)
+    draw_screen(0)
 
-    encoder.encode(frames, 'out/movie.zip', GRID, QUALITY, GOP, RANGE, RANGE_STEP,
-        CALLBACK=encode_progress)
+    print "EXIT 0"
 
-    while True:
-        draw_screen(16)
 

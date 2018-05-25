@@ -6,13 +6,13 @@ import pygame
 from cStringIO import StringIO
 from natural_sort import sort_nicely
 
-def read_zipfile(ZIP_FILENAME):
-    zf = zipfile.ZipFile(ZIP_FILENAME, 'r')
+def _read_zipfile(filepath):
+    ''' Read custom format zipfile structure. '''
+    zf = zipfile.ZipFile(filepath, 'r')
 
     # return values
     tile_info = {}
     config = {}
-    frames = []
 
     # read tile_info
     for line in zf.read('tiles.txt').split('\r\n'):
@@ -35,51 +35,47 @@ def read_zipfile(ZIP_FILENAME):
     frames_list = filter(lambda x: 'frame' in x, frames_list)
     sort_nicely(frames_list)
 
-    for frame in frames_list:
-        image_bits = zf.read(frame)
-        image_stream = StringIO(image_bits)
-        image = pygame.image.load(image_stream, frame)
-        frames += [image]
+    def frame_gen():
+        for frame in frames_list:
+            image_bits = zf.read(frame)
+            image_stream = StringIO(image_bits)
+            image = pygame.image.load(image_stream, frame)
+            yield image
+        zf.close()
 
-    return tile_info, config, frames
+    return tile_info, config, frame_gen()
 
-def decode(tile_info, config, frames):
+def _decode_params(tile_info, config, frames):
+    ''' Frame generator from an encoded set of frames and tiles. '''
     GRID = int(config['GRID'])
     GRID_W = int(config['GRID_W'])
     
     last_frame = None
-    for i, frame in enumerate(frames):
-        if last_frame == None or i not in tile_info:
-            last_frame = frame
-            yield frame
-            continue
+    frame_idx = 0
 
-        last_frame_px = pygame.surfarray.pixels3d(last_frame)
-        frame_px = pygame.surfarray.pixels3d(frame)
-
-        for tid, dx, dy in tile_info[i]:
-            tx = tid % GRID_W * GRID
-            ty = tid / GRID_W * GRID
-            offx, offy = (tx+dx, ty+dy)
-            fill_px = last_frame_px[offx:offx+GRID, offy:offy+GRID, :]
-            frame_px[tx:tx+GRID, ty:ty+GRID, :] = fill_px
-
-        del frame_px
-        del last_frame_px
-
-        yield frame
+    for frame in frames:
         
+        if last_frame == None or frame_idx not in tile_info:
+            pass
+            
+        else:
+            last_frame_px = pygame.surfarray.pixels3d(last_frame)
+            frame_px = pygame.surfarray.pixels3d(frame)
 
-if __name__ == '__main__':
-    tile_info, config, frames = read_zipfile('out/movie.zip')
-    FPS = int(config['FPS'])
+            for tid, dx, dy in tile_info[frame_idx]:
+                tx = tid % GRID_W * GRID
+                ty = tid / GRID_W * GRID
+                offx, offy = (tx+dx, ty+dy)
+                fill_px = last_frame_px[offx:offx+GRID, offy:offy+GRID, :]
+                frame_px[tx:tx+GRID, ty:ty+GRID, :] = fill_px
 
-    pygame.init()
-    screen = pygame.display.set_mode([400,300])
+            del frame_px
+            del last_frame_px
 
-    for frame in decode(tile_info, config, frames):
-        screen.blit(frame, (0,0))
-        pygame.display.flip()
-        time.sleep(1./FPS)
+        last_frame = frame
+        frame_idx += 1
+        yield frame
 
-    raw_input()
+def decode(filepath):
+    tile_info, config, frames = _read_zipfile(filepath)
+    return config, _decode_params(tile_info, config, frames)

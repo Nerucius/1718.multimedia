@@ -1,5 +1,8 @@
 import pygame
+import numpy as np
+
 from scipy import signal
+
 
 def fx_scale(surface, dim, target=None):
     if target:

@@ -108,10 +108,12 @@ if __name__ == '__main__':
 
     
     args = parser.parse_args()
-    print args
+    # print args
 
-    pygame.init()
-    screen = pygame.display.set_mode([400,300])
+    # Init arguments
+    if not args.batch:
+        pygame.init()
+        screen = pygame.display.set_mode([400,300])
 
     if args.encode:
         frame_reader = read_frames(args.input)
@@ -120,33 +122,42 @@ if __name__ == '__main__':
             _,_,FW,FH = frame.get_rect()
             player.playback(
                 {'FPS':0, 'SCALE':args.scale, 'FRAME_W':FW, 'FRAME_H':FH},
-            [frame])
+                [frame],
+                args,
+            )
 
-        if args.batch:
-            CALLBACK = None
-        else:
-            CALLBACK = progress
+        if args.batch: CALLBACK = None
+        else: CALLBACK = progress
 
-        FPS = 25
         if args.fps: FPS = args.fps
+        else: FPS = 24
+
+        t0 = time.clock()
 
         encoder.encode(frame_reader, args.output,
             GRID=args.ntiles, QUALITY=args.quality, GOP=args.gop,
             RANGE=args.seekRange, RANGE_STEP=max(args.seekRange / 2, 1),
             CALLBACK=CALLBACK, FPS=FPS, MAX_FRAMES=args.n)
 
+        print "-------------"
+        print "Encoding Finished"
+        print "file saved                     : %s" % args.output
+        print "total encoding time            : %.3fs" % (time.clock() - t0)
+        print "output filesize                : %.2f KiB" % (os.stat(args.output).st_size / 1024.)
+
+
     if args.decode:
+        if args.encode:
+            args.input = args.output
+
         config, frames = decoder.decode(args.input)
         if args.fps: config['FPS'] = args.fps
 
-        print config 
         config['SCALE'] = args.scale
 
-        player.playback(config, frames)
+        player.playback(config, frames, args)
 
 
-    draw_screen(0)
 
-    print "EXIT 0"
 
 

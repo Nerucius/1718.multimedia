@@ -2,6 +2,7 @@ import sys, zipfile, os
 import pygame
 import time
 import numpy as np
+from effects import *
 
 white = (255,255,255)
 black = (  0,  0,  0)
@@ -9,7 +10,10 @@ black = (  0,  0,  0)
 frame = 0
 last_frame_time = -999
 
-def playback(config, frame_gen):
+def playback(config, frame_gen, args=None):
+    ''' Launch a Media Player to display a sequence of frames using the given configuration and
+        optionally effects arguments. '''
+
     # Setup frametime
     FPS = int(config['FPS'])
     if FPS <= 0:
@@ -29,7 +33,6 @@ def playback(config, frame_gen):
 
     # PyGame Config
     pygame.init()
-    pygame.font.init()
     pygame.display.set_caption("TMM Media Player 0.2f1")
     font = pygame.font.SysFont('Consolas', 14)
     screen = pygame.display.set_mode(FRAME_SIZE)
@@ -41,6 +44,15 @@ def playback(config, frame_gen):
         for event in pygame.event.get():
             if event.type == pygame.QUIT: sys.exit()
 
+        # Apply effects
+        if args is not None:
+            if args.negative: fx_negative(img_frame)
+            if args.edges: fx_edge(img_frame)
+            if args.gray: fx_grayscale(img_frame)
+            if args.averaging: fx_average(img_frame, args.averaging)
+            if args.binarization: fx_binarize(img_frame, args.binarization)
+
+        # Scale and paint
         frame_scale = pygame.transform.scale(img_frame, FRAME_SIZE)
         screen.blit(frame_scale, (0,0))
 

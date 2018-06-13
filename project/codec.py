@@ -6,7 +6,6 @@ import argparse
 
 from cStringIO import StringIO
 from natural_sort import sort_nicely
-from effects import *
 
 import encoder
 import decoder
@@ -50,25 +49,11 @@ def apply_effects(img_frame, args):
     if args.binarization: fx_binarize(img_frame, args.binarization)
     if args.gray: fx_grayscale(img_frame)
 
-# def encode_progress(frame, frame_idx, tile_info):
-#     GRID = args.ntiles
-#     GRID_W = FRAME_W / GRID
-#     tile_info = [line.strip().split(',') for line in tile_info]
-#     screen.blit(frame, (0,0))
-
-#     for tile in tile_info:
-#         f, tid, dx, dy = [int(x) for x in tile]
-#         if f != frame_idx: continue
-#         tx = tid % GRID_W * GRID
-#         ty = tid / GRID_W * GRID
-#         # offx, offy = (tx+dx, ty+dy)
-#         # pygame.draw.rect(screen, GREEN, (tx, ty, GRID, GRID), 1)
-#     draw_screen(0)
 
 if __name__ == '__main__':
 
     # Arguments
-    parser = argparse.ArgumentParser(description="Encoder")
+    parser = argparse.ArgumentParser(description="Encoder / Decoder / Playback of images.")
     parser.add_argument('-e', '--encode', action='store_true',
         help="encoding mode, please specify input and output")
     parser.add_argument('-d', '--decode', action='store_true',
